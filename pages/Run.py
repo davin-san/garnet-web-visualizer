@@ -2,6 +2,8 @@ import streamlit as st
 import re
 import subprocess
 import shlex
+import time
+from utils.parse_stats import parse_stats_file, save_run_data
 
 # Set the page configuration for a wider layout
 st.set_page_config(layout="wide")
@@ -49,13 +51,20 @@ st.write(
     "The selections are summarized at the bottom of the page."
 )
 
+st.sidebar.header("Instructions")
+st.sidebar.info(
+    "1. Configure the system. \n"
+    "2. Specify the executable path and hit run command. \n"
+    "3. The application will save the run statistics and display the command line output."
+)
+
 # --- Default Values for Garnet Synthetic Traffic ---
 DEFAULTS = {
     # App config
     'gem5_path': './build/NULL/gem5.debug',
     'script_path': 'configs/example/garnet_synth_traffic.py',
     # System
-    'num_cpus': 4,
+    'num_cpus': 16,
     'sys_voltage': '1.0V',
     'sys_clock': '1GHz',
     # Simulation Time
@@ -88,14 +97,14 @@ DEFAULTS = {
     'ruby': False,
     'ruby_clock': '2GHz',
     'access_backing_store': False,
-    'num_dirs': 4, # This will be dynamically set to num_cpus on init
+    'num_dirs': 16, # This will be dynamically set to num_cpus on init
     'recycle_latency': 10,
-    'network': 'garnet',
-    'topology': 'Mesh_XY',
+    'network': 'simple',
+    'topology': 'Crossbar',
     'mesh_rows': 1,
     'router_latency': 1,
     'link_latency': 1,
-    'link_width_bits': 1024,
+    'link_width_bits': 128,
     'vcs_per_vnet': 4,
     'garnet_deadlock_threshold': 50000,
     'routing_algorithm': 0,
@@ -135,16 +144,45 @@ def sync_composite_widget(config_key, val_key, unit_key):
     unit = st.session_state.get(unit_key, '')
     st.session_state.config[config_key] = f"{value}{unit}"
 
-def update_cpus_and_dirs():
+# Add this new function with your other callbacks
+def handle_cpu_change():
     """
-    Callback for the num_cpus widget. It updates its own value
-    in the config and also syncs num_dirs to match, mimicking
-    gem5's default behavior where num_dirs defaults to num_cpus.
+    Updates num_cpus, syncs num_dirs, and if the network is garnet,
+    it calculates and updates a valid mesh-rows value.
     """
-    if 'num_cpus' in st.session_state:
-        new_cpu_val = st.session_state['num_cpus']
-        st.session_state.config['num_cpus'] = new_cpu_val
-        st.session_state.config['num_dirs'] = new_cpu_val
+    # 1. Get the new CPU value from the widget's state
+    new_cpu_val = st.session_state.num_cpus
+    
+    # 2. Update the config for cpus and dirs (as before)
+    st.session_state.config['num_cpus'] = new_cpu_val
+    st.session_state.config['num_dirs'] = new_cpu_val
+
+    # 3. If network is garnet, intelligently update mesh_rows
+    if st.session_state.config.get('network') == 'garnet':
+        # Calculate a reasonable number of rows (integer square root)
+        # This provides a good default for a square-ish mesh
+        new_mesh_rows = int(new_cpu_val ** 0.5)
+        
+        # Ensure rows is at least 1 and divides num_cpus, adjust if not
+        while new_cpu_val % new_mesh_rows != 0:
+            new_mesh_rows -= 1
+            if new_mesh_rows == 0:
+                new_mesh_rows = 1 # Fallback for prime numbers
+                break
+
+        st.session_state.config['mesh_rows'] = new_mesh_rows
+
+def update_network_and_topology():
+    """Callback to sync network and automatically update topology."""
+    # First, sync the network widget's own value
+    new_network_val = st.session_state['network']
+    st.session_state.config['network'] = new_network_val
+
+    # Now, update topology based on the new network value
+    if new_network_val == 'garnet':
+        st.session_state.config['topology'] = 'Mesh_XY'
+    elif new_network_val == 'simple':
+        st.session_state.config['topology'] = 'Crossbar'
 
 # Initialize session state to hold the configuration
 if 'config' not in st.session_state:
@@ -152,6 +190,8 @@ if 'config' not in st.session_state:
     # Default for num_dirs is num_cpus
     st.session_state.config['num_dirs'] = st.session_state.config['num_cpus']
     # Add state for command execution
+    st.session_state.run_triggered = False
+    st.session_state.last_run_messages = []
     st.session_state.is_running = False
     st.session_state.command_output = None
     st.session_state.command_error = None
@@ -164,6 +204,11 @@ def generate_command_string(config, defaults):
     base_cmd = f"{executable_path} {script_path}"
     args = []
     
+    # --- NEW: Check if Garnet is active and define required keys ---
+    is_garnet_active = config.get('network') == 'garnet'
+    required_garnet_keys = ['num_cpus', 'num_dirs', 'mesh_rows']
+    # --- END NEW ---
+    
     for key, value in config.items():
         # Skip the paths, as they are part of the base command, not flags
         if key in ['gem5_path', 'script_path']:
@@ -171,13 +216,22 @@ def generate_command_string(config, defaults):
 
         # If num_dirs is the same as num_cpus, it's redundant and can be omitted
         # because the gem5 script defaults num_dirs to num_cpus if unspecified.
-        if key == 'num_dirs' and value == config.get('num_cpus'):
+        # This rule does NOT apply to garnet, which requires it explicitly.
+        if key == 'num_dirs' and value == config.get('num_cpus') and not is_garnet_active:
             continue
 
         default_value = defaults.get(key)
         
+        # --- MODIFIED: Logic to skip default values ---
+        # The original behavior is to skip any value that matches the default.
         if value == default_value:
-            continue
+            # We add an exception: if Garnet is active and the key is one
+            # of the required ones, we DO NOT skip it.
+            if is_garnet_active and key in required_garnet_keys:
+                pass  # Force inclusion by doing nothing here.
+            else:
+                continue # Otherwise, skip the default value as usual.
+        # --- END MODIFIED ---
             
         flag = f"--{key.replace('_', '-')}"
         
@@ -258,10 +312,10 @@ with st.expander("System, CPU, and Simulation Control", expanded=True):
             'Number of CPUs (`--num-cpus`)',
             min_value=1,
             step=1,
-            help="Number of CPUs to simulate. This will also update the number of directories.",
+            help="Number of CPUs to simulate. When using the Garnet network, this will also auto-update mesh-rows to a valid value.",
             value=st.session_state.config['num_cpus'],
             key='num_cpus',
-            on_change=update_cpus_and_dirs
+            on_change=handle_cpu_change
         )
 
         st.text_input(
@@ -411,7 +465,7 @@ with st.expander("Memory Configuration", expanded=False):
 # --- Cache Configuration ---
 # ==============================================================================
 with st.expander("Cache Configuration", expanded=False):
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     size_units = ["kB", "MB", "GB"]
     with col1:
         st.subheader("Enable Caches")
@@ -420,6 +474,8 @@ with st.expander("Cache Configuration", expanded=False):
         st.subheader("Cache Counts")
         st.number_input('Num L2 Caches (`--num-l2caches`)', min_value=1, value=st.session_state.config['num_l2caches'], key='num_l2caches', on_change=sync_widget, args=('num_l2caches',))
         st.number_input('Num L3 Caches (`--num-l3caches`)', min_value=0, value=st.session_state.config['num_l3caches'], key='num_l3caches', on_change=sync_widget, args=('num_l3caches',))
+        st.subheader("Misc Cache")
+        st.number_input('Cacheline Size (`--cacheline_size`)', min_value=16, step=16, value=st.session_state.config['cacheline_size'], key='cacheline_size', on_change=sync_widget, args=('cacheline_size',))
     with col2:
         st.subheader("Cache Sizes")
         composite_input("L1D Size", "l1d_size", size_units)
@@ -432,16 +488,17 @@ with st.expander("Cache Configuration", expanded=False):
         st.number_input('L1I Assoc (`--l1i_assoc`)', min_value=1, value=st.session_state.config['l1i_assoc'], key='l1i_assoc', on_change=sync_widget, args=('l1i_assoc',))
         st.number_input('L2 Assoc (`--l2_assoc`)', min_value=1, value=st.session_state.config['l2_assoc'], key='l2_assoc', on_change=sync_widget, args=('l2_assoc',))
         st.number_input('L3 Assoc (`--l3_assoc`)', min_value=1, value=st.session_state.config['l3_assoc'], key='l3_assoc', on_change=sync_widget, args=('l3_assoc',))
-    with col4:
-        st.subheader("Misc Cache")
-        st.number_input('Cacheline Size (`--cacheline_size`)', min_value=16, step=16, value=st.session_state.config['cacheline_size'], key='cacheline_size', on_change=sync_widget, args=('cacheline_size',))
 
 # ==============================================================================
 # --- Ruby and Network Configuration ---
 # ==============================================================================
 with st.expander("Ruby and Network Configuration", expanded=False):
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
+        st.subheader("Network Type & Topology")
+        st.selectbox("Network Type (`--network`)", ['simple', 'garnet'], index=['simple', 'garnet'].index(st.session_state.config['network']), key='network', on_change=update_network_and_topology)
+        st.text_input("Topology (`--topology`)", value=st.session_state.config['topology'], key='topology', on_change=sync_widget, args=('topology',))
+        st.number_input("Mesh Rows (`--mesh-rows`)", min_value=1, value=st.session_state.config['mesh_rows'], key='mesh_rows', on_change=sync_widget, args=('mesh_rows',))
         st.subheader("Ruby System")
         st.checkbox("Enable Ruby (`--ruby`)", value=st.session_state.config['ruby'], key='ruby', on_change=sync_widget, args=('ruby',))
         composite_input("Ruby Clock", "ruby_clock", ["kHz", "MHz", "GHz"])
@@ -457,18 +514,13 @@ with st.expander("Ruby and Network Configuration", expanded=False):
         )
         st.number_input('Recycle Latency (`--recycle-latency`)', min_value=0, value=st.session_state.config['recycle_latency'], key='recycle_latency', on_change=sync_widget, args=('recycle_latency',))
     with col2:
-        st.subheader("Network Type & Topology")
-        st.selectbox("Network Type (`--network`)", ['simple', 'garnet'], index=['simple', 'garnet'].index(st.session_state.config['network']), key='network', on_change=sync_widget, args=('network',))
-        st.text_input("Topology (`--topology`)", value=st.session_state.config['topology'], key='topology', on_change=sync_widget, args=('topology',))
-        st.number_input("Mesh Rows (`--mesh-rows`)", min_value=1, value=st.session_state.config['mesh_rows'], key='mesh_rows', on_change=sync_widget, args=('mesh_rows',))
-    with col3:
         st.subheader("Network Internals")
         st.number_input("Router Latency (`--router-latency`)", min_value=1, value=st.session_state.config['router_latency'], key='router_latency', on_change=sync_widget, args=('router_latency',))
         st.number_input("Link Latency (`--link-latency`)", min_value=1, value=st.session_state.config['link_latency'], key='link_latency', on_change=sync_widget, args=('link_latency',))
         st.number_input("Link Width (bits) (`--link-width-bits`)", min_value=8, step=8, value=st.session_state.config['link_width_bits'], key='link_width_bits', on_change=sync_widget, args=('link_width_bits',))
         st.number_input("VCs per VNet (`--vcs-per-vnet`)", min_value=1, value=st.session_state.config['vcs_per_vnet'], key='vcs_per_vnet', on_change=sync_widget, args=('vcs_per_vnet',))
         st.number_input("Garnet Deadlock Threshold", min_value=1, value=st.session_state.config['garnet_deadlock_threshold'], key='garnet_deadlock_threshold', on_change=sync_widget, args=('garnet_deadlock_threshold',))
-    with col4:
+    with col3:
         st.subheader("Routing & NUMA")
         st.selectbox("Routing Algorithm", options=[0, 1, 2], index=st.session_state.config['routing_algorithm'], format_func=lambda x: {0: "0: Weight-based", 1: "1: XY", 2: "2: Custom"}[x], key='routing_algorithm', on_change=sync_widget, args=('routing_algorithm',))
         st.checkbox("Enable Network Fault Model", value=st.session_state.config['network_fault_model'], key='network_fault_model', on_change=sync_widget, args=('network_fault_model',))
@@ -477,6 +529,7 @@ with st.expander("Ruby and Network Configuration", expanded=False):
         st.number_input("Interleaving Bits", min_value=0, value=st.session_state.config['interleaving_bits'], key='interleaving_bits', on_change=sync_widget, args=('interleaving_bits',))
         st.number_input("XOR Low Bit", min_value=0, value=st.session_state.config['xor_low_bit'], key='xor_low_bit', on_change=sync_widget, args=('xor_low_bit',))
         st.number_input("Ports", min_value=1, value=st.session_state.config['ports'], key='ports', on_change=sync_widget, args=('ports',))
+    # In the "Ruby and Network Configuration" expander, after all the widgets...    
 
 # ==============================================================================
 # --- Traffic Injection Configuration ---
@@ -516,76 +569,99 @@ command = generate_command_string(st.session_state.config, DEFAULTS)
 st.subheader("Generated Command")
 st.code(command, language="bash")
 
+if st.session_state.config['network'] == 'garnet':
+        st.markdown("---")
+        st.subheader("Garnet Configuration")
+        
+        # Get current values
+        cpus = st.session_state.config['num_cpus']
+        rows = st.session_state.config['mesh_rows']
+        
+        # Check for validity
+        if cpus % rows == 0:
+            cols = cpus // rows
+            st.info(
+                f"✅ **Valid Configuration**: With **{cpus}** CPUs and **{rows}** mesh rows, "
+                f"the script will create a **{rows} x {cols}** mesh network."
+            )
+        else:
+            st.error(
+                f"⚠️ **Invalid Configuration**: The number of CPUs ({cpus}) must be "
+                f"perfectly divisible by the number of mesh rows ({rows})."
+            )
+
+# ==============================================================================
 # --- Command Execution ---
+# ==============================================================================
+st.markdown("---")
 st.subheader("Execute Command")
 
-# Layout for the execution controls
 exec_col1, exec_col2, exec_col3 = st.columns([2, 2, 1])
-
 with exec_col1:
-    st.text_input(
-        "gem5 Executable Path",
-        value=st.session_state.config['gem5_path'],
-        key='gem5_path',
-        on_change=sync_widget,
-        args=('gem5_path',),
-        help="Path to the gem5 executable (e.g., ./build/X86/gem5.opt)"
-    )
-
+    st.text_input("gem5 Executable Path", value=st.session_state.config['gem5_path'], key='gem5_path', on_change=sync_widget, args=('gem5_path',), help="Path to the gem5 executable (e.g., ./build/X86/gem5.opt)")
 with exec_col2:
-    st.text_input(
-        "Script Path",
-        value=st.session_state.config['script_path'],
-        key='script_path',
-        on_change=sync_widget,
-        args=('script_path',),
-        help="Path to the python configuration script to run."
-    )
-
+    st.text_input("Script Path", value=st.session_state.config['script_path'], key='script_path', on_change=sync_widget, args=('script_path',), help="Path to the python configuration script to run.")
 with exec_col3:
-    # This empty container helps align the button vertically with the text input
     st.write("") 
     button_label = "Running..." if st.session_state.is_running else "Run Command"
-    if st.button(button_label, disabled=st.session_state.is_running, use_container_width=True):
-        st.session_state.is_running = True
-        st.session_state.command_output = None
-        st.session_state.command_error = None
-        
-        # Use shlex to split the command string safely for subprocess
-        command_list = shlex.split(command)
-        
-        try:
-            # Run the command
-            with st.spinner('Executing command... Please wait.'):
-                result = subprocess.run(
-                    command_list, 
-                    capture_output=True, 
-                    text=True,
-                    check=False  # Do not raise exception for non-zero exit codes
-                )
-            
-            # Store output and error
-            st.session_state.command_output = result.stdout
-            st.session_state.command_error = result.stderr
-            
-            if result.returncode == 0:
-                st.success("Command executed successfully!")
-            else:
-                st.error(f"Command failed with return code: {result.returncode}")
+    if st.button(button_label, disabled=st.session_state.is_running, width='stretch'):
+        st.session_state.run_triggered = True
+        st.rerun()
 
-        except FileNotFoundError:
-            st.error(f"Command failed. The executable '{command_list[0]}' was not found. Please ensure it is in your system's PATH.")
-            st.session_state.command_output = "File not found error."
-            st.session_state.command_error = f"Could not find the executable: {command_list[0]}"
-        except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
-            st.session_state.command_error = str(e)
-        finally:
-            # Always reset the running state and rerun to update the UI
-            st.session_state.is_running = False
-            st.rerun()
+# --- Execution Logic (Triggered by Button) ---
+if st.session_state.run_triggered:
+    st.session_state.run_triggered = False
+    st.session_state.last_run_messages = [] 
+    st.session_state.is_running = True
+    st.session_state.command_output = None
+    st.session_state.command_error = None
+    
+    command_list = shlex.split(command)
+    try:
+        with st.spinner('🚀 Executing gem5 simulation... Please wait.'):
+            result = subprocess.run(command_list, capture_output=True, text=True, check=False)
+            time.sleep(1) 
+        
+        st.session_state.command_output = result.stdout
+        st.session_state.command_error = result.stderr
+        
+        if result.returncode == 0:
+            st.session_state.last_run_messages.append(("success", "✅ Command executed successfully!"))
+            with st.spinner("💾 Parsing and saving statistics..."):
+                parsed_stats = parse_stats_file() 
+                if parsed_stats:
+                    run_name = save_run_data(st.session_state.config, parsed_stats)
+                    st.session_state.last_run_messages.append(("info", f"📈 Statistics saved to '{run_name}'!"))
+                else:
+                    st.session_state.last_run_messages.append(("warning", "⚠️ Could not find or parse stats.txt. No data was saved."))
+                time.sleep(1)
+        else:
+            st.session_state.last_run_messages.append(("error", f"❌ Command failed with return code: {result.returncode}"))
+    except FileNotFoundError:
+        st.session_state.last_run_messages.append(("error", f"Command failed. The executable '{command_list[0]}' was not found."))
+        st.session_state.command_error = f"Could not find the executable: {command_list[0]}"
+    except Exception as e:
+        st.session_state.last_run_messages.append(("error", f"An unexpected error occurred: {e}"))
+        st.session_state.command_error = str(e)
+    finally:
+        st.session_state.is_running = False
+        st.rerun()
 
-# --- Display Command Output ---
+
+# --- Persistent Display of Run Results ---
+if st.session_state.last_run_messages:
+    st.markdown("---")
+    st.subheader("Last Run Status")
+    for msg_type, msg_text in st.session_state.last_run_messages:
+        if msg_type == "success":
+            st.success(msg_text)
+        elif msg_type == "info":
+            st.info(msg_text)
+        elif msg_type == "warning":
+            st.warning(msg_text)
+        elif msg_type == "error":
+            st.error(msg_text)
+
 if st.session_state.command_output is not None:
     with st.expander("Standard Output", expanded=True):
         st.code(st.session_state.command_output, language="text")
@@ -594,10 +670,6 @@ if st.session_state.command_error:
     with st.expander("Standard Error", expanded=True):
         st.code(st.session_state.command_error, language="text")
 
-
-st.subheader("Full Configuration")
+# --- Full Configuration Viewer ---
 with st.expander("View Full Configuration JSON"):
     st.json(st.session_state.config)
-
-
-

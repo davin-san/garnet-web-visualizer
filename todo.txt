@@ -1,0 +1,3 @@
+Import custom topologies
+Improve visualization
+Containerize the application with compiled gem5
