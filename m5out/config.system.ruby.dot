@@ -1,0 +1,13 @@
+graph G {
+rankdir=LR;
+"system.ruby.network.routers0" [shape=Mrecord, label="R 0", style="rounded, filled", color="#000000", fillcolor="#cce6fc", fontname=Arial, fontsize=14, fontcolor="#000000"];
+"system.ruby.network.routers1" [shape=Mrecord, label="R 1", style="rounded, filled", color="#000000", fillcolor="#cce6fc", fontname=Arial, fontsize=14, fontcolor="#000000"];
+"system.ruby.network.routers2" [shape=Mrecord, label="R 2", style="rounded, filled", color="#000000", fillcolor="#cce6fc", fontname=Arial, fontsize=14, fontcolor="#000000"];
+"system.ruby.network.routers0" -- "system.ruby.network.routers2" [weight=0.5, color="#042d50", dir=forward];
+"system.ruby.network.routers1" -- "system.ruby.network.routers2" [weight=0.5, color="#042d50", dir=forward];
+"system.ruby.network.routers2" -- "system.ruby.network.routers0" [weight=0.5, color="#042d50", dir=forward];
+"system.ruby.l1_cntrl0" [shape=Mrecord, label=l1, style="rounded, filled", color="#000000", fillcolor="#e5bcd0", fontname=Arial, fontsize=14, fontcolor="#000000"];
+"system.ruby.l1_cntrl0" -- "system.ruby.network.routers0" [weight=1.0, color="#381526", dir=both];
+"system.ruby.dir_cntrl0" [shape=Mrecord, label=dir, style="rounded, filled", color="#000000", fillcolor="#e5bcd0", fontname=Arial, fontsize=14, fontcolor="#000000"];
+"system.ruby.dir_cntrl0" -- "system.ruby.network.routers1" [weight=1.0, color="#381526", dir=both];
+}
