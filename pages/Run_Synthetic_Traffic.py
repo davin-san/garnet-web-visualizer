@@ -35,6 +35,11 @@ div.stButton > button:disabled {
     color: #666666;
     border: 1px solid #999999;
 }
+/* Style for wrapping text in st.code block */
+pre code {
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+}
 </style>""", unsafe_allow_html=True)
 
 
@@ -130,6 +135,17 @@ def sync_composite_widget(config_key, val_key, unit_key):
     unit = st.session_state.get(unit_key, '')
     st.session_state.config[config_key] = f"{value}{unit}"
 
+def update_cpus_and_dirs():
+    """
+    Callback for the num_cpus widget. It updates its own value
+    in the config and also syncs num_dirs to match, mimicking
+    gem5's default behavior where num_dirs defaults to num_cpus.
+    """
+    if 'num_cpus' in st.session_state:
+        new_cpu_val = st.session_state['num_cpus']
+        st.session_state.config['num_cpus'] = new_cpu_val
+        st.session_state.config['num_dirs'] = new_cpu_val
+
 # Initialize session state to hold the configuration
 if 'config' not in st.session_state:
     st.session_state.config = DEFAULTS.copy()
@@ -153,13 +169,13 @@ def generate_command_string(config, defaults):
         if key in ['gem5_path', 'script_path']:
             continue
 
+        # If num_dirs is the same as num_cpus, it's redundant and can be omitted
+        # because the gem5 script defaults num_dirs to num_cpus if unspecified.
+        if key == 'num_dirs' and value == config.get('num_cpus'):
+            continue
+
         default_value = defaults.get(key)
         
-        # Special case for num_dirs, its default depends on num_cpus default
-        if key == 'num_dirs':
-            if value == defaults.get('num_cpus'):
-                continue
-
         if value == default_value:
             continue
             
@@ -242,11 +258,10 @@ with st.expander("System, CPU, and Simulation Control", expanded=True):
             'Number of CPUs (`--num-cpus`)',
             min_value=1,
             step=1,
-            help="Number of CPUs to simulate.",
+            help="Number of CPUs to simulate. This will also update the number of directories.",
             value=st.session_state.config['num_cpus'],
             key='num_cpus',
-            on_change=sync_widget,
-            args=('num_cpus',)
+            on_change=update_cpus_and_dirs
         )
 
         st.text_input(
@@ -431,7 +446,15 @@ with st.expander("Ruby and Network Configuration", expanded=False):
         st.checkbox("Enable Ruby (`--ruby`)", value=st.session_state.config['ruby'], key='ruby', on_change=sync_widget, args=('ruby',))
         composite_input("Ruby Clock", "ruby_clock", ["kHz", "MHz", "GHz"])
         st.checkbox('Access Backing Store', value=st.session_state.config['access_backing_store'], key='access_backing_store', on_change=sync_widget, args=('access_backing_store',))
-        st.number_input('Number of Directories (`--num-dirs`)', min_value=1, value=st.session_state.config['num_dirs'], key='num_dirs', on_change=sync_widget, args=('num_dirs',))
+        st.number_input(
+            'Number of Directories (`--num-dirs`)',
+            min_value=1,
+            value=st.session_state.config['num_dirs'],
+            key='num_dirs',
+            on_change=sync_widget,
+            args=('num_dirs',),
+            help="Number of memory directories. Can be set independently of CPUs."
+        )
         st.number_input('Recycle Latency (`--recycle-latency`)', min_value=0, value=st.session_state.config['recycle_latency'], key='recycle_latency', on_change=sync_widget, args=('recycle_latency',))
     with col2:
         st.subheader("Network Type & Topology")
@@ -575,4 +598,6 @@ if st.session_state.command_error:
 st.subheader("Full Configuration")
 with st.expander("View Full Configuration JSON"):
     st.json(st.session_state.config)
+
+
 
