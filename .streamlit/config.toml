@@ -1,5 +1,12 @@
 [server]
+runOnSave = true
 headless = true
+
+[global]
+disableWidgetStateDuplicationWarning = true
 
 [browser]
 gatherUsageStats = false
+
+[client]
+toolbarMode = "viewer"
