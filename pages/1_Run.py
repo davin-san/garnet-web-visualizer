@@ -1,7 +1,6 @@
 import streamlit as st
 import subprocess
 import shlex
-import time
 from utils.parse_stats import parse_stats_file, save_run_data
 from utils.config_manager import ConfigManager
 

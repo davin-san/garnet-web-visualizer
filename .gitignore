@@ -3,3 +3,4 @@ run_data/
 experiment_runs/
 custom_topologies/
 __pycache__/
+.venv/

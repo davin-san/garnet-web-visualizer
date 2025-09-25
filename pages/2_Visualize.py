@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import os
 import pandas as pd
-import shutil # Import the shutil module for directory operations
+import shutil
 
 def get_config_diff(selected_data):
     """
