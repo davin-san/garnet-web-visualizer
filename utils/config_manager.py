@@ -107,10 +107,11 @@ class ConfigManager:
         self.config[config_key] = f"{value}{unit}"
     
     def handle_cpu_change(self):
-        # The widget's key is the same as the config key now
-        new_cpu_val = st.session_state[f'num_cpus_{self.key}']
+        new_cpu_val = st.session_state['num_cpus']
         self.config['num_cpus'] = new_cpu_val
         self.config['num_dirs'] = new_cpu_val
+        st.session_state['num_dirs'] = new_cpu_val
+
         if self.config.get('network') == 'garnet':
             new_mesh_rows = int(new_cpu_val ** 0.5)
             while new_cpu_val % new_mesh_rows != 0:
@@ -119,15 +120,22 @@ class ConfigManager:
                     new_mesh_rows = 1
                     break
             self.config['mesh_rows'] = new_mesh_rows
+            st.session_state['mesh_rows'] = new_mesh_rows
 
     def update_network_and_topology(self):
-        # The widget's key is the same as the config key
         new_network_val = st.session_state.network
         self.config['network'] = new_network_val
+
         if new_network_val == 'garnet':
-            self.config['topology'] = 'Mesh_XY'
+            new_topology = 'Mesh_XY'
         elif new_network_val == 'simple':
-            self.config['topology'] = 'Crossbar'
+            new_topology = 'Crossbar'
+        # In case there are other network types in the future
+        else:
+            new_topology = self.config.get('topology', 'Crossbar')
+
+        self.config['topology'] = new_topology
+        st.session_state['topology'] = new_topology
 
     # --- UI Rendering Methods ---
     def composite_input(self, label, config_key, units, help_text=""):

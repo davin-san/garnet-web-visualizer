@@ -56,9 +56,15 @@ def main():
         st.warning("This will permanently delete all JSON files in the 'run_data' folder.")
         # Add a button to confirm the deletion
         if st.button("Confirm and Delete All"):
-            if os.path.exists(data_dir):
+            if os.path.exists(data_dir) and os.path.isdir(data_dir):
                 try:
-                    shutil.rmtree(data_dir) # Deletes the folder and all its contents
+                    # --- START OF CHANGE ---
+                    # Loop through all files in the directory and delete them
+                    for filename in os.listdir(data_dir):
+                        file_path = os.path.join(data_dir, filename)
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                    # --- END OF CHANGE ---
                     st.toast("All runs have been deleted! ✨")
                     st.rerun() # Rerun the script to refresh the file list
                 except Exception as e:

@@ -36,5 +36,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Expose the default Streamlit port so you can access it from your browser
 EXPOSE 8501
 
+HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
+
 # Set the final command to run the Streamlit app
-CMD ["streamlit", "run", "Home.py"]
+ENTRYPOINT ["streamlit", "run", "Home.py", "--server.port=8501", "--server.address=0.0.0.0"]
