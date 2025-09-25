@@ -5,35 +5,37 @@ st.title('Garnet Web Visualizer')
 
 st.markdown(
     """
-Welcome to the **Garnet Web Visualizer**, an interactive front-end for running and analyzing  
+Welcome to the **Garnet Web Visualizer**, a browser-based front-end for running and analyzing  
 **gem5's Garnet Network-on-Chip (NoC) simulations**.  
 
-This tool streamlines the simulation process by providing an intuitive browser-based interface where you can:
+This tool organizes the workflow into three main sections:
 
-- **Adjust system parameters** (CPU count, memory, cache, network topology, mesh size, and synthetic traffic injection)  
-- **Automatically generate a gem5 command** based on your selections  
-- **Run Garnet simulations directly** without typing long command lines  
-- **Monitor execution logs** and view organized results for each run  
-- **Visualize simulation statistics** such as latency, throughput, and utilization from gem5's `stats.txt`  
+- **System Configuration Adjuster**  
+  Configure CPUs, memory, cache, Ruby/NoC settings, and synthetic traffic injection.  
+  An auto-generated gem5 command is shown so you know exactly how your run is set up.  
 
-All results are saved in structured output directories (`run_data/<timestamp>`), including logs, configuration info, and statistics.  
-This ensures each run is easy to reproduce, compare, and analyze.  
+- **Experiment Runner**  
+  Sweep an independent variable (e.g., injection rate), set parameter values, and launch multiple simulations.  
+  Results are stored in structured directories for easy comparison.  
+
+- **JSON Data Analyzer**  
+  Import completed run outputs, select statistics (latency, throughput, utilization),  
+  and visualize trends across experiments with plots and tables.  
 
 ---
 
 ### 🚀 Quick Start
-1. Open the **System Configuration Adjuster** panels and select your simulation parameters.  
-   - Example: 16 CPUs, Mesh_XY topology, 4 mesh rows, uniform random traffic, injection rate 0.01.  
-2. Review the **Generated Command** section at the bottom of the page.  
-   - The gem5 command is auto-generated based on your inputs.  
-3. Click **Run Command** to launch the simulation.  
-   - gem5 runs in the background, and logs are captured automatically.  
-4. Navigate to the **Visualize** tab to analyze results.  
-   - Graphs and tables make it easy to compare injection rate vs. latency, throughput, and more.  
+1. Go to **System Configuration Adjuster** and set your simulation parameters.  
+   - Example: 16 CPUs, Mesh_XY topology, 4 mesh rows, injection rate 0.01.  
+2. Review the **Generated Command** section at the bottom to see the exact gem5 command.  
+3. Click **Run** to start the simulation.  
+   - Logs and statistics are saved automatically under `run_data/<timestamp>`.  
+4. For sweeps, open the **Experiment Runner** to test multiple injection rates or configurations.  
+5. Use the **Visualize** tab to load JSON results and plot selected statistics.  
 
 ---
 
-This workflow removes the friction of manual configuration and command-line execution,  
-making Garnet experiments **faster, more reproducible, and accessible** directly from your browser.
+By combining configuration, experiment management, and visualization in one interface,  
+this tool makes Garnet simulations **faster, reproducible, and more accessible** — without needing to manage command-line scripts manually.
 """
 )
