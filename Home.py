@@ -1,11 +1,12 @@
 import streamlit as st
 
+st.set_page_config(layout="centered")
 st.title('Garnet Web Visualizer')
 
 st.markdown(
     """
 Welcome to the **Garnet Web Visualizer**, an interactive front-end for running and analyzing  
-**gem5’s Garnet Network-on-Chip (NoC) simulations**.  
+**gem5's Garnet Network-on-Chip (NoC) simulations**.  
 
 This tool streamlines the simulation process by providing an intuitive browser-based interface where you can:
 
@@ -13,9 +14,9 @@ This tool streamlines the simulation process by providing an intuitive browser-b
 - **Automatically generate a gem5 command** based on your selections  
 - **Run Garnet simulations directly** without typing long command lines  
 - **Monitor execution logs** and view organized results for each run  
-- **Visualize simulation statistics** such as latency, throughput, and utilization from gem5’s `stats.txt`  
+- **Visualize simulation statistics** such as latency, throughput, and utilization from gem5's `stats.txt`  
 
-All results are saved in structured output directories (`results/<run_id>`), including logs, configuration info, and statistics.  
+All results are saved in structured output directories (`run_data/<timestamp>`), including logs, configuration info, and statistics.  
 This ensures each run is easy to reproduce, compare, and analyze.  
 
 ---
@@ -27,7 +28,7 @@ This ensures each run is easy to reproduce, compare, and analyze.
    - The gem5 command is auto-generated based on your inputs.  
 3. Click **Run Command** to launch the simulation.  
    - gem5 runs in the background, and logs are captured automatically.  
-4. Navigate to the **Dashboard** tab to analyze results.  
+4. Navigate to the **Visualize** tab to analyze results.  
    - Graphs and tables make it easy to compare injection rate vs. latency, throughput, and more.  
 
 ---

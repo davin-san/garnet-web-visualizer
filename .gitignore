@@ -1,2 +1,5 @@
 m5out/
 run_data/
+experiment_runs/
+custom_topologies/
+__pycache__/

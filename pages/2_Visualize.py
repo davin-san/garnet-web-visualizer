@@ -45,9 +45,9 @@ def main():
 
     st.sidebar.header("Instructions")
     st.sidebar.info(
-        "1. Select the JSON files you want to analyze from the dropdown below.\n"
-        "2. Choose a statistic to plot on the Y-axis.\n"
-        "3. The application will display the configuration differences and a bar chart of the selected statistic."
+        "1. **Select Runs**: Choose one or more completed simulation runs from the dropdown menu.\n"
+        "2. **Choose Statistic**: Pick a simulation output (e.g., latency) to plot on the chart.\n"
+        "3. **Analyze Results**: Compare configuration differences and visualize the selected statistic across runs."
     )
 
     # --- New Feature: Delete All Runs ---
