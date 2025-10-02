@@ -142,16 +142,32 @@ def main():
         st.header(f"Graph of '{y_axis_stat}'")
         
         # Prepare data for plotting
+        # 1. Robustly extract and clean data for plotting
+        plot_values = []
+        for d in all_data:
+            # Get the raw value, which could be a number, string ("nan"), or None
+            raw_value = d.get('stats', {}).get(y_axis_stat)
+            
+            # Try to convert to float, defaulting to 0.0 on failure.
+            # This correctly handles numeric values and safely converts non-numeric
+            # data (like the "nan" string for l1_overall_hit_rate) to zero.
+            try:
+                plot_values.append(float(raw_value))
+            except (ValueError, TypeError):
+                plot_values.append(0.0)
+
+        # 2. Prepare data for the DataFrame with a simple column name
         plot_data = {
             'run_name': [d['run_name'] for d in all_data],
-            y_axis_stat: [d.get('stats', {}).get(y_axis_stat, 0) for d in all_data]
+            'value': plot_values  # Use a simple, generic name for the y-axis data
         }
         plot_df = pd.DataFrame(plot_data)
         
-        # Set 'run_name' as the index for proper plotting with st.bar_chart
+        # 3. Set 'run_name' as the index for the x-axis labels
         plot_df = plot_df.set_index('run_name')
 
-        # Create the plot using Streamlit's native bar chart
+        # 4. Create the plot
+        # Streamlit will now correctly plot the 'value' column.
         st.bar_chart(plot_df)
 
 if __name__ == '__main__':

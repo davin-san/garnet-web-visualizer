@@ -4,15 +4,14 @@ import os
 from typing import Dict, Union
 from datetime import datetime
 
-# MODIFICATION: The regex now expects a single space, as we normalize the line first.
 STAT_REGEX = re.compile(
     r"([a-zA-Z0-9_:\.\-]+) ([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?|nan|inf)"
 )
 
 def parse_stats_file(filepath: str = "m5out/stats.txt") -> Dict[str, Union[float, str]]:
     """
-    Parses a gem5 stats.txt file, extracting a curated list of important,
-    common latency-related stats.
+    Parses a gem5 stats.txt file, extracting and aggregating a curated list
+    of important, common system-focused stats.
 
     Args:
         filepath (str): The path to the stats.txt file.
@@ -26,52 +25,86 @@ def parse_stats_file(filepath: str = "m5out/stats.txt") -> Dict[str, Union[float
         print(f"Warning: Stats file not found at {filepath}")
         return stats
 
-    exact_latency_keys = {
-        "simSeconds",
-        "hostSeconds",
+    exact_keys = {
+        # Simulation time stats
+        "simSeconds", "simTicks", "finalTick",
+        # Host machine stats
+        "hostSeconds", "hostTickRate", "hostMemory",
+        # Workload stats
+        "system.workload.inst.arm",
+        # Ruby network-on-chip (NoC) overall stats
         "system.ruby.network.average_flit_latency",
-        "system.ruby.network.average_flit_network_latency",
-        "system.ruby.network.average_flit_queueing_latency",
         "system.ruby.network.average_packet_latency",
-        "system.ruby.network.average_packet_network_latency",
-        "system.ruby.network.average_packet_queueing_latency",
+        "system.ruby.network.average_hops",
+        "system.ruby.network.avg_link_utilization",
     }
-
-    mem_ctrl_latency_suffixes = {}
-    # mem_ctrl_latency_suffixes = {
-    #     ".priorityMinLatency",
-    #     ".priorityMaxLatency",
-    #     ".dram.avgQLat",
-    #     ".dram.avgBusLat",
-    #     ".dram.avgMemAccLat",
-    # }
+    
+    # Capture latency stats for each memory controller individually.
+    mem_ctrl_latency_suffixes = {
+        # ".priorityMinLatency",
+        # ".priorityMaxLatency",
+        # ".dram.avgQLat",
+        # ".dram.avgBusLat",
+        # ".dram.avgMemAccLat",
+    }
     
     mem_ctrl_prefix_regex = re.compile(r'system\.mem_ctrls\d+')
 
+    # Add variables for aggregation.
+    total_l1_demand_hits = 0
+    total_l1_demand_misses = 0
+    total_dram_energy_pj = 0.0
+
     with open(filepath, 'r') as f:
         for line in f:
-            # **THE FIX:** Normalize all varied whitespace into single spaces.
-            # This handles tabs, non-breaking spaces, and multiple spaces.
             normalized_line = re.sub(r'\s+', ' ', line).strip()
-            
             match = STAT_REGEX.match(normalized_line)
             if not match:
                 continue
 
             key = match.group(1)
-            
-            is_target_stat = (
-                key in exact_latency_keys or
-                (mem_ctrl_prefix_regex.match(key) and any(key.endswith(s) for s in mem_ctrl_latency_suffixes))
-            )
+            value_str = match.group(2)
 
-            if is_target_stat:
-                value_str = match.group(2)
-                try:
-                    stats[key] = float(value_str)
-                except ValueError:
-                    stats[key] = value_str
-                    
+            try:
+                value = float(value_str)
+            except ValueError:
+                value = value_str # Keep as string if 'nan' or 'inf'
+            
+            # --- Key-based parsing and aggregation ---
+            
+            # 1. Parse exact keys
+            if key in exact_keys:
+                stats[key] = value
+
+            # 2. Parse per-memory controller stats
+            elif mem_ctrl_prefix_regex.match(key) and any(key.endswith(s) for s in mem_ctrl_latency_suffixes):
+                stats[key] = value
+
+            # 3. Aggregate L1 cache stats
+            elif key.endswith(".cacheMemory.m_demand_hits"):
+                if "l1_cntrl" in key:
+                    total_l1_demand_hits += int(value)
+            elif key.endswith(".cacheMemory.m_demand_misses"):
+                if "l1_cntrl" in key:
+                    total_l1_demand_misses += int(value)
+
+            # 4. Aggregate total DRAM energy
+            elif key.endswith(".dram.rank.totalEnergy"): # Gem5 23+
+                total_dram_energy_pj += value
+            elif ".dram.rank" in key and key.endswith(".totalEnergy"): # Older Gem5
+                total_dram_energy_pj += value
+
+
+    # Calculate and add aggregated stats to the final dictionary.
+    total_l1_accesses = total_l1_demand_hits + total_l1_demand_misses
+    if total_l1_accesses > 0:
+        stats["system.ruby.l1_overall_hit_rate"] = total_l1_demand_hits / total_l1_accesses
+    else:
+        stats["system.ruby.l1_overall_hit_rate"] = "nan"
+    
+    stats["system.dram.total_energy_pj"] = total_dram_energy_pj
+    stats["system.dram.total_energy_nj"] = total_dram_energy_pj / 1000.0 # Convert to nanojoules
+
     return stats
 
 def save_run_data(config, stats, output_dir="run_data"):

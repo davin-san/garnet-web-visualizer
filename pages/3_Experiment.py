@@ -48,7 +48,7 @@ default_x_index = filtered_x_options.index('injectionrate') if 'injectionrate' i
 x_axis_var = st.selectbox("Variable to sweep:", options=filtered_x_options, index=default_x_index)
 
 st.header("2. Define Values for Selected Variable")
-x_values_str = st.text_input(f"Enter comma-separated values for '{x_axis_var}'", "0.01, 0.02, 0.03, 0.04")
+x_values_str = st.text_input(f"Enter comma-separated values for '{x_axis_var}'", "0.1, 0.2, 0.3, 0.4")
 
 # --- Configuration Section ---
 st.header("3. Configure Base Simulation Parameters")
