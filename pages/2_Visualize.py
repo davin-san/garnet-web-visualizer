@@ -133,7 +133,7 @@ def main():
         if len(selected_files) > 1:
             config_diff_df = get_config_diff(all_data)
             if not config_diff_df.empty:
-                st.dataframe(config_diff_df, width='stretch')
+                st.dataframe(config_diff_df.astype(str), width='stretch')
             else:
                 st.success("No differences found in the configuration sections of the selected files.")
         else:
