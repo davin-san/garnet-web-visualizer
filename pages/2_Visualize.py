@@ -2,7 +2,6 @@ import streamlit as st
 import json
 import os
 import pandas as pd
-import shutil
 
 def get_config_diff(selected_data):
     """

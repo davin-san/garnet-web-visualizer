@@ -9,17 +9,15 @@ RUN apt -y update && apt -y upgrade && \
     python3-dev doxygen libboost-all-dev libhdf5-serial-dev python3-pydot \
     libpng-dev libelf-dev pkg-config pip python3-venv wget tar
 
-RUN pip install mypy pre-commit
+RUN pip install mypy pre-commit pandas-stubs
 
 # Set a working directory
 WORKDIR /app
 
 # Download and build gem5 (stable)
-RUN wget https://github.com/gem5/gem5/archive/refs/tags/v22.1.0.0.tar.gz && \
-    tar -xzf v22.1.0.0.tar.gz && \
-    rm v22.1.0.0.tar.gz
+RUN git clone https://github.com/davin-san/gem5-tracer.git
 
-WORKDIR /app/gem5-22.1.0.0
+WORKDIR /app/gem5-tracer
 RUN scons build/NULL/gem5.debug -j $(nproc) PROTOCOL=Garnet_standalone
 
 # Return to /app for the application code

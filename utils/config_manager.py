@@ -7,8 +7,8 @@ class ConfigManager:
 
     DEFAULTS = {
         # App config
-        'gem5_path': '../gem5-22.1.0.0/build/NULL/gem5.debug',
-        'script_path': '../gem5-22.1.0.0/configs/example/garnet_synth_traffic.py',
+        'gem5_path': '../gem5-tracer/build/NULL/gem5.debug',
+        'script_path': '../gem5-tracer/configs/example/garnet_synth_traffic.py',
         # System
         'num_cpus': 16,
         'sys_voltage': '1.0V',
@@ -162,7 +162,7 @@ class ConfigManager:
         if help_text:
             st.caption(help_text)
 
-    def display_widgets(self, exclude_key: str = None):
+    def display_widgets(self, exclude_key: str):
         """Renders all configuration widgets, skipping any key in the exclude list."""
         
         # Helper function to check if a widget should be displayed

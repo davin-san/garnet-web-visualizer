@@ -27,7 +27,7 @@ if 'run_triggered' not in st.session_state:
 # --- Initialize the Config Manager ---
 # This handles all config-related state, widgets, and command generation.
 config_manager = ConfigManager(session_state_key='config')
-config_manager.display_widgets()
+config_manager.display_widgets(exclude_key='')
 
 # ==============================================================================
 # --- Generated Command and Execution ---
