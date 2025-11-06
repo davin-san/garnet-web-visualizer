@@ -34,7 +34,7 @@ protobuf==6.33.0
 pyarrow==21.0.0
 pydeck==0.9.1
 pydot==1.4.2
-Pygments==2.11.2
+Pygments==2.15.0
 PyGObject==3.42.1
 pyparsing==2.4.7
 python-dateutil==2.9.0.post0
