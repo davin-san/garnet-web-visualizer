@@ -18,7 +18,7 @@ WORKDIR /workspace
 RUN git clone https://github.com/davin-san/gem5-tracer.git /workspace/gem5-tracer
 
 WORKDIR /workspace/gem5-tracer
-RUN scons build/NULL/gem5.fast -j $(nproc) PROTOCOL=Garnet_standalone
+RUN scons build/NULL/gem5.debug -j $(nproc) PROTOCOL=Garnet_standalone
 
 # Return to /app for the application code
 WORKDIR /workspace
