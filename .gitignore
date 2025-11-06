@@ -5,4 +5,4 @@ custom_topologies/
 __pycache__/
 .venv/
 .mypy_cache/
-traces/
+garnet_event_log.bin

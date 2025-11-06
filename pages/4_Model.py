@@ -377,6 +377,8 @@ def make_animation(snapshots, routers, links, interval=250):
             yaxis=dict(visible=False, scaleanchor="x", scaleratio=1),
             hovermode='closest',
             plot_bgcolor='white',
+            
+            # ========== START: UPDATED SECTION ==========
             updatemenus=[{
                 "buttons": [
                     {"args": [None, {"frame": {"duration": 500, "redraw": True},
@@ -384,16 +386,20 @@ def make_animation(snapshots, routers, links, interval=250):
                      "label": "▶ Play",
                      "method": "animate"},
                     {"args": [[None], {"frame": {"duration": 0, "redraw": True},
-                                      "mode": "immediate",
-                                      "transition": {"duration": 0}}],
+                                     "mode": "immediate",
+                                     "transition": {"duration": 0}}],
                      "label": "⏸ Pause",
                      "method": "animate"},
                 ],
                 "direction": "left",
-                "pad": {"r": 10, "t": 87},
+                "pad": {"r": 0, "t": 0},  # Removed t: 87
                 "type": "buttons",
-                "x": 0.1,
-                "y": 1.15,
+                "x": 0.1,              # Position buttons at 10% from left
+                "xanchor": "right",    # Anchor their right edge
+                "y": -0.15,                # Position at the bottom
+                "yanchor": "top",       # Align their top to the bottom
+                "font": {"color": "black"},
+                "bgcolor": "white"
             }],
             sliders=[{
                 "active": 0,
@@ -405,12 +411,13 @@ def make_animation(snapshots, routers, links, interval=250):
                      "method": "animate"}
                     for t in ticks
                 ],
-                "x": 0.1,
-                "len": 0.85,
-                "xanchor": "left",
-                "y": 0,
-                "yanchor": "top",
+                "x": 0.15,              # Start slider at 10% from left
+                "len": 0.85,            # Fill remaining 90%
+                "xanchor": "left",     # Anchor its left edge
+                "y": 0,                # Position at the bottom
+                "yanchor": "top"       # Align its top to the bottom
             }]
+            # ========== END: UPDATED SECTION ==========
         ),
         frames=frames
     )
@@ -440,7 +447,7 @@ def main():
         with st.spinner("Generating animation..."):
             fig = make_animation(snapshots, routers, links, interval=ANIMATION_INTERVAL)
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch') # Changed to use_container_width
 
     else:
         # File does not exist
