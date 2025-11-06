@@ -4,3 +4,5 @@ experiment_runs/
 custom_topologies/
 __pycache__/
 .venv/
+.mypy_cache/
+traces/

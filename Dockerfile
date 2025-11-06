@@ -9,19 +9,19 @@ RUN apt -y update && apt -y upgrade && \
     python3-dev doxygen libboost-all-dev libhdf5-serial-dev python3-pydot \
     libpng-dev libelf-dev pkg-config pip python3-venv wget tar
 
-RUN pip install mypy pre-commit pandas-stubs
+RUN pip install mypy pre-commit
 
 # Set a working directory
-WORKDIR /app
+WORKDIR /workspace
 
 # Download and build gem5 (stable)
-RUN git clone https://github.com/davin-san/gem5-tracer.git
+RUN git clone https://github.com/davin-san/gem5-tracer.git /workspace/gem5-tracer
 
-WORKDIR /app/gem5-tracer
-RUN scons build/NULL/gem5.debug -j $(nproc) PROTOCOL=Garnet_standalone
+WORKDIR /workspace/gem5-tracer
+RUN scons build/NULL/gem5.fast -j $(nproc) PROTOCOL=Garnet_standalone
 
 # Return to /app for the application code
-WORKDIR /app
+WORKDIR /workspace
 
 # OPTIMIZATION: Install dependencies during the build. 
 # This is faster than installing every time the container starts.
@@ -48,7 +48,7 @@ ENTRYPOINT ( \
         cd garnet-web-visualizer && git pull origin main || git pull origin master; \
     else \
         echo "Cloning repository..."; \
-        git clone https://github.com/davin-san/garnet-web-visualizer.git; \
+        git clone https://github.com/davin-san/garnet-web-visualizer.git /workspace/garnet-web-visualizer; \
         cd garnet-web-visualizer; \
     fi && \
     exec streamlit run Home.py --server.port=8501 \
